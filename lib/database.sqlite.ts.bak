@@ -1,0 +1,1061 @@
+import Database from 'better-sqlite3';
+import { join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
+
+const dbPath = join(process.cwd(), 'data', 'portfolio.db');
+const dbDir = join(process.cwd(), 'data');
+
+// Ensure data directory exists
+if (!existsSync(dbDir)) {
+  mkdirSync(dbDir, { recursive: true });
+}
+
+let db: Database.Database | null = null;
+
+/**
+ * Get database instance (singleton)
+ */
+export function getDatabase(): Database.Database {
+  if (!db) {
+    db = new Database(dbPath);
+    db.pragma('journal_mode = WAL'); // Enable WAL mode for better concurrency
+    initializeDatabase(db);
+  }
+  return db;
+}
+
+/**
+ * Check if a table has a specific column
+ */
+function tableHasColumn(database: Database.Database, tableName: string, columnName: string): boolean {
+  try {
+    const result = database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+    return result.some(col => col.name === columnName);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Initialize database schema
+ */
+function initializeDatabase(database: Database.Database): void {
+  // Accounts table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS Accounts (
+      id TEXT PRIMARY KEY,
+      alias TEXT NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // DailyNAV table with UNIQUE constraint on [account_id, date]
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS DailyNAV (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id TEXT NOT NULL,
+      date TEXT NOT NULL,
+      nav_value REAL NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(account_id, date),
+      FOREIGN KEY (account_id) REFERENCES Accounts(id)
+    )
+  `);
+
+  // Create index for faster queries
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_dailynav_account_date 
+    ON DailyNAV(account_id, date)
+  `);
+
+  // Trades table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS Trades (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      quantity REAL NOT NULL,
+      price REAL NOT NULL,
+      commission REAL DEFAULT 0,
+      date TEXT NOT NULL,
+      realized_pnl REAL DEFAULT 0,
+      trade_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (account_id) REFERENCES Accounts(id)
+    )
+  `);
+
+  // Create index for trades
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_trades_account_date 
+    ON Trades(account_id, date)
+  `);
+
+  // Transactions table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS Transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      amount REAL NOT NULL,
+      date TEXT NOT NULL,
+      description TEXT,
+      symbol TEXT,
+      transaction_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (account_id) REFERENCES Accounts(id)
+    )
+  `);
+
+  // Create index for transactions
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_transactions_account_date 
+    ON Transactions(account_id, date)
+  `);
+
+  // Cash table - drop and recreate to ensure correct schema
+  // Check if table exists and has wrong schema
+  const cashTableInfo = database.prepare(`
+    SELECT sql FROM sqlite_master WHERE type='table' AND name='Cash'
+  `).get() as { sql: string } | undefined;
+  
+  if (cashTableInfo) {
+    const sql = (cashTableInfo.sql || '').toUpperCase();
+    // If table has old column names (cash_amount, date) or missing UNIQUE constraint, drop it
+    const hasOldSchema = sql.includes('CASH_AMOUNT') || (sql.includes('DATE TEXT') && !sql.includes('REPORT_DATE'));
+    const missingUnique = !sql.includes('UNIQUE(ACCOUNT_ID, REPORT_DATE)');
+    if (hasOldSchema || missingUnique) {
+      console.log('[DB] Dropping Cash table due to schema mismatch');
+      database.exec(`DROP TABLE IF EXISTS Cash`);
+    }
+  }
+  
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS Cash (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      fx_rate_to_base REAL DEFAULT 1.0,
+      report_date TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(account_id, report_date),
+      FOREIGN KEY (account_id) REFERENCES Accounts(id)
+    )
+  `);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_cash_account_date 
+    ON Cash(account_id, report_date)
+  `);
+
+  // Holdings table - drop and recreate to ensure correct schema
+  const holdingsTableInfo = database.prepare(`
+    SELECT sql FROM sqlite_master WHERE type='table' AND name='Holdings'
+  `).get() as { sql: string } | undefined;
+  
+  if (holdingsTableInfo) {
+    const sql = (holdingsTableInfo.sql || '').toUpperCase();
+    // If table has old column name (date instead of report_date) or missing UNIQUE constraint, drop it
+    const hasOldSchema = sql.includes('DATE TEXT') && sql.includes('SYMBOL TEXT') && !sql.includes('REPORT_DATE');
+    const missingUnique = !sql.includes('UNIQUE(ACCOUNT_ID, SYMBOL, REPORT_DATE)');
+    if (hasOldSchema || missingUnique) {
+      console.log('[DB] Dropping Holdings table due to schema mismatch');
+      database.exec(`DROP TABLE IF EXISTS Holdings`);
+    }
+  }
+  
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS Holdings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id TEXT NOT NULL,
+      symbol TEXT NOT NULL,
+      description TEXT,
+      position REAL NOT NULL,
+      mark_price REAL NOT NULL,
+      position_value REAL NOT NULL,
+      cost_basis_money REAL DEFAULT 0,
+      fifo_pnl_unrealized REAL DEFAULT 0,
+      percent_of_nav REAL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      fx_rate_to_base REAL DEFAULT 1.0,
+      conid TEXT,
+      report_date TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(account_id, symbol, report_date),
+      FOREIGN KEY (account_id) REFERENCES Accounts(id)
+    )
+  `);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_holdings_account_symbol
+    ON Holdings(account_id, symbol, report_date)
+  `);
+
+  // Add is_manual column if not present (allows manual overrides that FlexQuery can't clobber)
+  const holdingsCols = database.prepare(`PRAGMA table_info(Holdings)`).all() as Array<{ name: string }>;
+  if (!holdingsCols.some(c => c.name === 'is_manual')) {
+    database.exec(`ALTER TABLE Holdings ADD COLUMN is_manual INTEGER DEFAULT 0`);
+    console.log('[DB] Added is_manual column to Holdings table');
+  }
+
+  // Transfers table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS Transfers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      direction TEXT NOT NULL,
+      amount REAL NOT NULL,
+      date TEXT NOT NULL,
+      description TEXT,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      fx_rate_to_base REAL DEFAULT 1.0,
+      from_account TEXT,
+      to_account TEXT,
+      transaction_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (account_id) REFERENCES Accounts(id)
+    )
+  `);
+  
+  // Create unique index for transfers with transaction_id to prevent duplicates
+  try {
+    database.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_transfers_account_transaction_id 
+      ON Transfers(account_id, transaction_id) 
+      WHERE transaction_id IS NOT NULL
+    `);
+  } catch (e) {
+    // If partial index not supported, create regular index
+    console.log('[DB] Partial unique index not supported, using regular index');
+    database.exec(`
+      CREATE INDEX IF NOT EXISTS idx_transfers_account_transaction_id 
+      ON Transfers(account_id, transaction_id)
+    `);
+  }
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_transfers_account_date 
+    ON Transfers(account_id, date)
+  `);
+
+  // Deposits table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS Deposits (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      date TEXT NOT NULL,
+      description TEXT,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      fx_rate_to_base REAL DEFAULT 1.0,
+      transaction_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (account_id) REFERENCES Accounts(id)
+    )
+  `);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_deposits_account_date 
+    ON Deposits(account_id, date)
+  `);
+  
+  // Create unique index for deposits with transaction_id to prevent duplicates
+  try {
+    database.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_deposits_account_transaction_id 
+      ON Deposits(account_id, transaction_id) 
+      WHERE transaction_id IS NOT NULL
+    `);
+  } catch (e) {
+    // If partial index not supported, create regular index
+    console.log('[DB] Partial unique index not supported for deposits, using regular index');
+    database.exec(`
+      CREATE INDEX IF NOT EXISTS idx_deposits_account_transaction_id 
+      ON Deposits(account_id, transaction_id)
+    `);
+  }
+
+  // Withdrawals table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS Withdrawals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      date TEXT NOT NULL,
+      description TEXT,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      fx_rate_to_base REAL DEFAULT 1.0,
+      transaction_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (account_id) REFERENCES Accounts(id)
+    )
+  `);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_withdrawals_account_date 
+    ON Withdrawals(account_id, date)
+  `);
+
+  // Drop old unique indexes that might exist from previous schema versions
+  const indexesToDrop = [
+    'idx_dividends_unique',
+    'idx_interest_unique',
+    'idx_fees_unique',
+    'idx_taxes_unique',
+    'idx_withdrawals_unique',
+    'idx_deposits_unique',
+    'idx_transfers_unique',
+    'idx_trades_unique'
+  ];
+  
+  for (const indexName of indexesToDrop) {
+    try {
+      database.exec(`DROP INDEX IF EXISTS ${indexName}`);
+    } catch (e) {
+      // Ignore if index doesn't exist
+    }
+  }
+  
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS Dividends (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      date TEXT NOT NULL,
+      description TEXT,
+      symbol TEXT,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      fx_rate_to_base REAL DEFAULT 1.0,
+      transaction_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (account_id) REFERENCES Accounts(id)
+    )
+  `);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_dividends_account_date 
+    ON Dividends(account_id, date)
+  `);
+  
+  // Create unique index for dividends with transaction_id to prevent duplicates
+  try {
+    database.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_dividends_account_transaction_id 
+      ON Dividends(account_id, transaction_id) 
+      WHERE transaction_id IS NOT NULL
+    `);
+  } catch (e) {
+    console.log('[DB] Partial unique index not supported for dividends, using regular index');
+    database.exec(`
+      CREATE INDEX IF NOT EXISTS idx_dividends_account_transaction_id 
+      ON Dividends(account_id, transaction_id)
+    `);
+  }
+
+  // Interest table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS Interest (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      date TEXT NOT NULL,
+      description TEXT,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      fx_rate_to_base REAL DEFAULT 1.0,
+      transaction_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (account_id) REFERENCES Accounts(id)
+    )
+  `);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_interest_account_date 
+    ON Interest(account_id, date)
+  `);
+  
+  // Create unique index for interest with transaction_id to prevent duplicates
+  try {
+    database.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_interest_account_transaction_id 
+      ON Interest(account_id, transaction_id) 
+      WHERE transaction_id IS NOT NULL
+    `);
+  } catch (e) {
+    console.log('[DB] Partial unique index not supported for interest, using regular index');
+    database.exec(`
+      CREATE INDEX IF NOT EXISTS idx_interest_account_transaction_id 
+      ON Interest(account_id, transaction_id)
+    `);
+  }
+
+  // Fees table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS Fees (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      date TEXT NOT NULL,
+      description TEXT,
+      fee_type TEXT,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      fx_rate_to_base REAL DEFAULT 1.0,
+      transaction_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (account_id) REFERENCES Accounts(id)
+    )
+  `);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_fees_account_date 
+    ON Fees(account_id, date)
+  `);
+  
+  // Create unique index for fees with transaction_id to prevent duplicates
+  try {
+    database.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_fees_account_transaction_id 
+      ON Fees(account_id, transaction_id) 
+      WHERE transaction_id IS NOT NULL
+    `);
+  } catch (e) {
+    console.log('[DB] Partial unique index not supported for fees, using regular index');
+    database.exec(`
+      CREATE INDEX IF NOT EXISTS idx_fees_account_transaction_id 
+      ON Fees(account_id, transaction_id)
+    `);
+  }
+
+  // Taxes table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS Taxes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      date TEXT NOT NULL,
+      description TEXT,
+      tax_type TEXT,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      fx_rate_to_base REAL DEFAULT 1.0,
+      transaction_id TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (account_id) REFERENCES Accounts(id)
+    )
+  `);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_taxes_account_date 
+    ON Taxes(account_id, date)
+  `);
+  
+  // Create unique index for taxes with transaction_id to prevent duplicates
+  try {
+    database.exec(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_taxes_account_transaction_id 
+      ON Taxes(account_id, transaction_id) 
+      WHERE transaction_id IS NOT NULL
+    `);
+  } catch (e) {
+    console.log('[DB] Partial unique index not supported for taxes, using regular index');
+    database.exec(`
+      CREATE INDEX IF NOT EXISTS idx_taxes_account_transaction_id 
+      ON Taxes(account_id, transaction_id)
+    `);
+  }
+
+  // ChangeInNAV table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS ChangeInNAV (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id TEXT NOT NULL,
+      from_date TEXT NOT NULL,
+      to_date TEXT NOT NULL,
+      starting_value REAL NOT NULL,
+      ending_value REAL NOT NULL,
+      deposits_withdrawals REAL DEFAULT 0,
+      dividends REAL DEFAULT 0,
+      interest REAL DEFAULT 0,
+      commissions REAL DEFAULT 0,
+      withholding_tax REAL DEFAULT 0,
+      other_fees REAL DEFAULT 0,
+      twr REAL DEFAULT 0,
+      fx_rate_to_base REAL DEFAULT 1.0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(account_id, from_date, to_date),
+      FOREIGN KEY (account_id) REFERENCES Accounts(id)
+    )
+  `);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_changeinnav_account_date 
+    ON ChangeInNAV(account_id, to_date)
+  `);
+
+  // KB Fund Prices table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS KBFundPrices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      fund_name TEXT NOT NULL,
+      price_per_unit_mkd REAL NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(date, fund_name)
+    )
+  `);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_kb_fund_prices_date 
+    ON KBFundPrices(date, fund_name)
+  `);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_kb_fund_prices_fund 
+    ON KBFundPrices(fund_name, date)
+  `);
+
+  // Live Prices table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS live_prices (
+      symbol TEXT PRIMARY KEY,
+      price REAL NOT NULL,
+      previous_close REAL,
+      previous_close_date TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      source TEXT
+    )
+  `);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_live_prices_updated_at 
+    ON live_prices(updated_at)
+  `);
+
+  // Settings table
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS Settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  console.log('Database initialized successfully');
+}
+
+/**
+ * Close database connection
+ */
+export function closeDatabase(): void {
+  if (db) {
+    db.close();
+    db = null;
+  }
+}
+
+// Account operations
+export const accountQueries = {
+  upsert: (database: Database.Database) => database.prepare(`
+    INSERT INTO Accounts (id, alias, currency, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET
+      alias = excluded.alias,
+      currency = excluded.currency,
+      updated_at = CURRENT_TIMESTAMP
+  `),
+
+  getAll: (database: Database.Database) => database.prepare(`
+    SELECT id, alias, currency FROM Accounts ORDER BY alias
+  `),
+
+  getById: (database: Database.Database) => database.prepare(`
+    SELECT id, alias, currency FROM Accounts WHERE id = ?
+  `),
+};
+
+// DailyNAV operations
+export const navQueries = {
+  upsert: (database: Database.Database) => database.prepare(`
+    INSERT INTO DailyNAV (account_id, date, nav_value)
+    VALUES (?, ?, ?)
+    ON CONFLICT(account_id, date) DO UPDATE SET
+      nav_value = excluded.nav_value,
+      created_at = CURRENT_TIMESTAMP
+  `),
+
+  getLatest: (database: Database.Database) => database.prepare(`
+    SELECT account_id, MAX(date) as max_date
+    FROM DailyNAV
+    GROUP BY account_id
+  `),
+
+  getByAccount: (database: Database.Database) => database.prepare(`
+    SELECT date, nav_value
+    FROM DailyNAV
+    WHERE account_id = ?
+    ORDER BY date ASC
+  `),
+
+  getLatestByAccount: (database: Database.Database) => {
+    const stmt = database.prepare(`
+      SELECT date, nav_value
+      FROM DailyNAV
+      WHERE account_id = ?
+      ORDER BY date DESC
+      LIMIT 1
+    `);
+    
+    return {
+      get: (accountId: string) => stmt.get(accountId) as { date: string; nav_value: number } | undefined,
+    };
+  },
+
+  getByDateRange: (database: Database.Database) => database.prepare(`
+    SELECT account_id, date, nav_value
+    FROM DailyNAV
+    WHERE date >= ? AND date <= ?
+    ORDER BY account_id, date ASC
+  `),
+
+  getEarliestDate: (database: Database.Database) => database.prepare(`
+    SELECT MIN(date) as earliest_date
+    FROM DailyNAV
+  `),
+};
+
+// KB Fund Prices operations
+export const kbFundPriceQueries = {
+  upsert: (database: Database.Database) => database.prepare(`
+    INSERT INTO KBFundPrices (date, fund_name, price_per_unit_mkd)
+    VALUES (?, ?, ?)
+    ON CONFLICT(date, fund_name) DO UPDATE SET
+      price_per_unit_mkd = excluded.price_per_unit_mkd,
+      created_at = CURRENT_TIMESTAMP
+  `),
+
+  getAll: (database: Database.Database) => database.prepare(`
+    SELECT date, fund_name, price_per_unit_mkd
+    FROM KBFundPrices
+    ORDER BY date DESC, fund_name ASC
+  `),
+
+  getByFund: (database: Database.Database) => database.prepare(`
+    SELECT date, price_per_unit_mkd
+    FROM KBFundPrices
+    WHERE fund_name = ?
+    ORDER BY date ASC
+  `),
+
+  getByDateRange: (database: Database.Database) => database.prepare(`
+    SELECT date, fund_name, price_per_unit_mkd
+    FROM KBFundPrices
+    WHERE date >= ? AND date <= ?
+    ORDER BY date ASC, fund_name ASC
+  `),
+
+  getLatestByFund: (database: Database.Database) => database.prepare(`
+    SELECT date, price_per_unit_mkd
+    FROM KBFundPrices
+    WHERE fund_name = ?
+    ORDER BY date DESC
+    LIMIT 1
+  `),
+
+  getLatest: (database: Database.Database) => database.prepare(`
+    SELECT fund_name, MAX(date) as max_date, price_per_unit_mkd
+    FROM KBFundPrices
+    GROUP BY fund_name
+  `),
+};
+
+// Trade operations
+export const tradeQueries = {
+  insert: (database: Database.Database) => database.prepare(`
+    INSERT INTO Trades (account_id, symbol, quantity, price, commission, date, realized_pnl, trade_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `),
+
+  getByAccount: (database: Database.Database) => database.prepare(`
+    SELECT symbol, quantity, price, commission, date, realized_pnl
+    FROM Trades
+    WHERE account_id = ?
+    ORDER BY date ASC
+  `),
+};
+
+// Transaction operations
+export const transactionQueries = {
+  insert: (database: Database.Database) => database.prepare(`
+    INSERT INTO Transactions (account_id, type, amount, date, description, symbol, transaction_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `),
+
+  getByAccount: (database: Database.Database) => database.prepare(`
+    SELECT type, amount, date, description, symbol
+    FROM Transactions
+    WHERE account_id = ?
+    ORDER BY date ASC
+  `),
+};
+
+// Cash operations
+export const cashQueries = {
+  upsert: (database: Database.Database) => database.prepare(`
+    INSERT INTO Cash (account_id, amount, currency, fx_rate_to_base, report_date)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(account_id, report_date) DO UPDATE SET
+      amount = excluded.amount,
+      currency = excluded.currency,
+      fx_rate_to_base = excluded.fx_rate_to_base,
+      created_at = CURRENT_TIMESTAMP
+  `),
+
+  getLatestByAccount: (database: Database.Database) => {
+    const stmt = database.prepare(`
+      SELECT amount, currency, fx_rate_to_base, report_date
+      FROM Cash
+      WHERE account_id = ?
+      ORDER BY report_date DESC
+      LIMIT 1
+    `);
+    
+    return {
+      get: (accountId: string, _unused?: string) => stmt.get(accountId),
+    };
+  },
+};
+
+// Holdings operations
+export const holdingQueries = {
+  upsert: (database: Database.Database) => database.prepare(`
+    INSERT INTO Holdings (account_id, symbol, description, position, mark_price, position_value, cost_basis_money, fifo_pnl_unrealized, percent_of_nav, currency, fx_rate_to_base, conid, report_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(account_id, symbol, report_date) DO UPDATE SET
+      description = excluded.description,
+      position = excluded.position,
+      mark_price = excluded.mark_price,
+      position_value = excluded.position_value,
+      cost_basis_money = excluded.cost_basis_money,
+      fifo_pnl_unrealized = excluded.fifo_pnl_unrealized,
+      percent_of_nav = excluded.percent_of_nav,
+      currency = excluded.currency,
+      fx_rate_to_base = excluded.fx_rate_to_base,
+      conid = excluded.conid,
+      created_at = CURRENT_TIMESTAMP
+  `),
+
+  getLatestByAccount: (database: Database.Database) => {
+    const stmt = database.prepare(`
+      SELECT h.symbol, h.description, h.position, h.mark_price, h.position_value, h.cost_basis_money,
+             h.fifo_pnl_unrealized, h.percent_of_nav, h.currency, h.fx_rate_to_base, h.conid
+      FROM Holdings h
+      WHERE h.account_id = ?
+        AND (
+          -- Manual-override rows always take precedence (FlexQuery uses real dates, never '9999-12-31')
+          COALESCE(h.is_manual, 0) = 1
+          OR
+          -- For symbols without a manual row, use the latest FlexQuery row
+          (
+            COALESCE(h.is_manual, 0) = 0
+            AND NOT EXISTS (
+              SELECT 1 FROM Holdings m
+              WHERE m.account_id = h.account_id
+                AND m.symbol = h.symbol
+                AND COALESCE(m.is_manual, 0) = 1
+            )
+            AND h.report_date = (
+              SELECT MAX(h2.report_date) FROM Holdings h2
+              WHERE h2.account_id = h.account_id
+                AND h2.symbol = h.symbol
+                AND COALESCE(h2.is_manual, 0) = 0
+            )
+          )
+        )
+        AND h.position != 0
+      ORDER BY h.symbol
+    `);
+
+    return {
+      all: (accountId: string) => stmt.all(accountId),
+    };
+  },
+
+  deleteByAccount: (database: Database.Database) => database.prepare(`
+    DELETE FROM Holdings WHERE account_id = ?
+  `),
+};
+
+// Transfer operations
+export const transferQueries = {
+  insert: (database: Database.Database) => database.prepare(`
+    INSERT INTO Transfers (account_id, type, direction, amount, date, description, currency, fx_rate_to_base, from_account, to_account, transaction_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `),
+
+  getByAccount: (database: Database.Database) => database.prepare(`
+    SELECT type, direction, amount, date, description, currency, fx_rate_to_base, from_account, to_account, transaction_id
+    FROM Transfers
+    WHERE account_id = ?
+    ORDER BY date ASC
+  `),
+};
+
+// Deposit operations
+export const depositQueries = {
+  insert: (database: Database.Database) => database.prepare(`
+    INSERT INTO Deposits (account_id, amount, date, description, currency, fx_rate_to_base, transaction_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `),
+
+  getByAccount: (database: Database.Database) => database.prepare(`
+    SELECT amount, date, description, currency, fx_rate_to_base, transaction_id
+    FROM Deposits
+    WHERE account_id = ?
+    ORDER BY date ASC
+  `),
+};
+
+// Withdrawal operations
+export const withdrawalQueries = {
+  insert: (database: Database.Database) => database.prepare(`
+    INSERT INTO Withdrawals (account_id, amount, date, description, currency, fx_rate_to_base, transaction_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `),
+
+  getByAccount: (database: Database.Database) => database.prepare(`
+    SELECT amount, date, description, currency, fx_rate_to_base, transaction_id
+    FROM Withdrawals
+    WHERE account_id = ?
+    ORDER BY date ASC
+  `),
+};
+
+// Dividend operations
+export const dividendQueries = {
+  insert: (database: Database.Database) => database.prepare(`
+    INSERT INTO Dividends (account_id, amount, date, description, symbol, currency, fx_rate_to_base, transaction_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `),
+
+  getByAccount: (database: Database.Database) => database.prepare(`
+    SELECT amount, date, description, symbol, currency, fx_rate_to_base, transaction_id
+    FROM Dividends
+    WHERE account_id = ?
+    ORDER BY date ASC
+  `),
+};
+
+// Interest operations
+export const interestQueries = {
+  insert: (database: Database.Database) => database.prepare(`
+    INSERT INTO Interest (account_id, amount, date, description, currency, fx_rate_to_base, transaction_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `),
+
+  getByAccount: (database: Database.Database) => database.prepare(`
+    SELECT amount, date, description, currency, fx_rate_to_base, transaction_id
+    FROM Interest
+    WHERE account_id = ?
+    ORDER BY date ASC
+  `),
+};
+
+// Fee operations
+export const feeQueries = {
+  insert: (database: Database.Database) => database.prepare(`
+    INSERT INTO Fees (account_id, amount, date, description, fee_type, currency, fx_rate_to_base, transaction_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `),
+
+  getByAccount: (database: Database.Database) => database.prepare(`
+    SELECT amount, date, description, fee_type, currency, fx_rate_to_base, transaction_id
+    FROM Fees
+    WHERE account_id = ?
+    ORDER BY date ASC
+  `),
+};
+
+// Tax operations
+export const taxQueries = {
+  insert: (database: Database.Database) => database.prepare(`
+    INSERT INTO Taxes (account_id, amount, date, description, tax_type, currency, fx_rate_to_base, transaction_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `),
+
+  getByAccount: (database: Database.Database) => database.prepare(`
+    SELECT amount, date, description, tax_type, currency, fx_rate_to_base, transaction_id
+    FROM Taxes
+    WHERE account_id = ?
+    ORDER BY date ASC
+  `),
+};
+
+// ChangeInNAV operations
+export const changeInNAVQueries = {
+  upsert: (database: Database.Database) => database.prepare(`
+    INSERT INTO ChangeInNAV (account_id, from_date, to_date, starting_value, ending_value, deposits_withdrawals, dividends, interest, commissions, withholding_tax, other_fees, twr, fx_rate_to_base)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(account_id, from_date, to_date) DO UPDATE SET
+      starting_value = excluded.starting_value,
+      ending_value = excluded.ending_value,
+      deposits_withdrawals = excluded.deposits_withdrawals,
+      dividends = excluded.dividends,
+      interest = excluded.interest,
+      commissions = excluded.commissions,
+      withholding_tax = excluded.withholding_tax,
+      other_fees = excluded.other_fees,
+      twr = excluded.twr,
+      fx_rate_to_base = excluded.fx_rate_to_base,
+      created_at = CURRENT_TIMESTAMP
+  `),
+
+  getByAccount: (database: Database.Database) => {
+    const stmt = database.prepare(`
+      SELECT from_date, to_date, starting_value, ending_value, deposits_withdrawals, dividends, interest, commissions, withholding_tax, other_fees, twr, fx_rate_to_base
+      FROM ChangeInNAV
+      WHERE account_id = ?
+      ORDER BY to_date DESC
+      LIMIT 1
+    `);
+    
+    return {
+      get: (accountId: string) => stmt.get(accountId),
+    };
+  },
+};
+
+// Live Prices operations
+export const livePriceQueries = {
+  upsert: (database: Database.Database) => database.prepare(`
+    INSERT INTO live_prices (symbol, price, previous_close, previous_close_date, updated_at, source)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+    ON CONFLICT(symbol) DO UPDATE SET
+      price = excluded.price,
+      previous_close = excluded.previous_close,
+      previous_close_date = excluded.previous_close_date,
+      updated_at = CURRENT_TIMESTAMP,
+      source = excluded.source
+  `),
+
+  /**
+   * Drop a symbol's cached live price. Used when the latest Yahoo response is
+   * stale for the current session (e.g. pre-market with no pre-market trade
+   * yet) so consumers fall back to Holdings.mark_price instead of serving the
+   * yesterday's-close value that was cached as "live".
+   */
+  invalidate: (database: Database.Database) => database.prepare(`
+    DELETE FROM live_prices WHERE symbol = ?
+  `),
+
+  get: (database: Database.Database) => {
+    const stmt = database.prepare(`
+      SELECT symbol, price, previous_close, previous_close_date, updated_at, source
+      FROM live_prices
+      WHERE symbol = ?
+    `);
+
+    return {
+      get: (symbol: string) => stmt.get(symbol) as {
+        price: number;
+        previous_close: number | null;
+        previous_close_date: string | null;
+        updated_at: string;
+        source: string | null;
+      } | undefined,
+    };
+  },
+
+  getAll: (database: Database.Database) => database.prepare(`
+    SELECT symbol, price, previous_close, previous_close_date, updated_at, source
+    FROM live_prices
+    ORDER BY symbol
+  `),
+};
+
+/**
+ * Sum external cash flows (deposits − withdrawals, FX-converted to USD) across
+ * the given accounts within an inclusive date range. Used by Today/MTD/YTD
+ * metric callers so contributions during the period aren't reported as P&L.
+ *
+ * @param accountIds  account IDs to include, or null for all accounts
+ *                    (excluding HUNGARY_MIGRATION_HISTORY)
+ * @param fromDate    inclusive lower bound, YYYY-MM-DD
+ * @param toDate      inclusive upper bound, YYYY-MM-DD (defaults to today)
+ */
+export function sumContributionsUSD(
+  database: Database.Database,
+  accountIds: Set<string> | string[] | null,
+  fromDate: string,
+  toDate: string = new Date().toISOString().split('T')[0]
+): number {
+  let idList: string[];
+  if (accountIds == null) {
+    idList = (database
+      .prepare(`SELECT id FROM Accounts WHERE id != 'HUNGARY_MIGRATION_HISTORY'`)
+      .all() as Array<{ id: string }>).map((r) => r.id);
+  } else {
+    idList = Array.from(accountIds);
+  }
+  if (idList.length === 0) return 0;
+
+  const placeholders = idList.map(() => '?').join(',');
+  const depRows = database
+    .prepare(
+      `SELECT amount, fx_rate_to_base FROM Deposits
+       WHERE account_id IN (${placeholders}) AND date >= ? AND date <= ?`
+    )
+    .all(...idList, fromDate, toDate) as Array<{ amount: number; fx_rate_to_base: number | null }>;
+  const wdRows = database
+    .prepare(
+      `SELECT amount, fx_rate_to_base FROM Withdrawals
+       WHERE account_id IN (${placeholders}) AND date >= ? AND date <= ?`
+    )
+    .all(...idList, fromDate, toDate) as Array<{ amount: number; fx_rate_to_base: number | null }>;
+
+  let net = 0;
+  for (const d of depRows) net += d.amount * (d.fx_rate_to_base ?? 1);
+  for (const w of wdRows) net -= w.amount * (w.fx_rate_to_base ?? 1);
+  return net;
+}
+
+/**
+ * Backwards-compatible wrapper: net contributions for today only.
+ */
+export function sumTodayContributionsUSD(
+  database: Database.Database,
+  accountIds: Set<string> | string[] | null
+): number {
+  const todayStr = new Date().toISOString().split('T')[0];
+  return sumContributionsUSD(database, accountIds, todayStr, todayStr);
+}
+
+// Settings operations
+export const settingsQueries = {
+  get: (database: Database.Database) => {
+    const stmt = database.prepare(`
+      SELECT key, value, updated_at
+      FROM Settings
+      WHERE key = ?
+    `);
+    
+    return {
+      get: (key: string) => stmt.get(key) as { value: string; updated_at: string } | undefined,
+    };
+  },
+
+  set: (database: Database.Database) => database.prepare(`
+    INSERT INTO Settings (key, value, updated_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_at = CURRENT_TIMESTAMP
+  `),
+
+  getAll: (database: Database.Database) => database.prepare(`
+    SELECT key, value, updated_at
+    FROM Settings
+    ORDER BY key
+  `),
+};

@@ -1,0 +1,294 @@
+{
+  "live_prices": [
+    {
+      "symbol": "NAAS",
+      "price": 3.069999933242798,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 3.1,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "VRAX",
+      "price": 2.579900026321411,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 2.5487,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "MU",
+      "price": 997.7949829101562,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 977.5,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "QUBT",
+      "price": 8.32859992980957,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 8.44,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "NVDA",
+      "price": 220.22999572753906,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 219.34,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "NFLX",
+      "price": 72.0010986328125,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 75.31,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "MSFT",
+      "price": 494.3800048828125,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 497.75,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "TSM",
+      "price": 430.1000061035156,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 430.26,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "RGTI",
+      "price": 15.21500015258789,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 15.99,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "QBTS",
+      "price": 16.690000534057617,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 17.69,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "AMZN",
+      "price": 253.0800018310547,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 251.19,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "AAPL",
+      "price": 334.8900146484375,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 337,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "DRAM",
+      "price": 58.665000915527344,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 57.78,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "MRVL",
+      "price": 236.2100067138672,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 240.76,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "META",
+      "price": 671.25,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 682.31,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "IONQ",
+      "price": 37.949798583984375,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 40.34,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "GOOGL",
+      "price": 349.5899963378906,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 347.33,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "AVGO",
+      "price": 354.7049865722656,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 347.3,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "ASML",
+      "price": 1645.199951171875,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 1629.67,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "ANET",
+      "price": 198.5399932861328,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 199.53,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "AMD",
+      "price": 546.239990234375,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (regular)",
+      "previous_close": 545.09,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "VUSD.L",
+      "price": 144.485,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (closed)",
+      "previous_close": 144.512,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "SMH.L",
+      "price": 106.6,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (closed)",
+      "previous_close": 105.42,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "IUIT.L",
+      "price": 51.83,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (closed)",
+      "previous_close": 51.75,
+      "previous_close_date": "2026-09-18"
+    },
+    {
+      "symbol": "EQQQ.SW",
+      "price": 720.5999755859375,
+      "updated_at": "2026-09-18 17:18:15",
+      "source": "Yahoo Finance (closed)",
+      "previous_close": 719.2,
+      "previous_close_date": "2026-09-18"
+    }
+  ],
+  "nav_latest": [
+    {
+      "id": 8505845,
+      "account_id": "U15352922",
+      "date": "2026-09-17",
+      "nav_value": 502520.624342198,
+      "created_at": "2026-09-18 11:40:50"
+    }
+  ],
+  "holdings_latest_date": "2026-06-04",
+  "holdings": [
+    {
+      "symbol": "SMH",
+      "description": "VANECK SEMICONDUCTOR ETF",
+      "position": 1571,
+      "mark_price": 64.2,
+      "position_value": 100858.2,
+      "cost_basis_money": 66798.61169,
+      "fifo_pnl_unrealized": 34059.58831,
+      "percent_of_nav": 28.87,
+      "currency": "USD",
+      "live_price": null,
+      "price_updated": null
+    },
+    {
+      "symbol": "IUIT",
+      "description": "ISHARES S&P 500 IT SECTOR",
+      "position": 2063,
+      "mark_price": 41.89,
+      "position_value": 86419.07,
+      "cost_basis_money": 66406.60671,
+      "fifo_pnl_unrealized": 20012.46329,
+      "percent_of_nav": 24.73,
+      "currency": "USD",
+      "live_price": null,
+      "price_updated": null
+    },
+    {
+      "symbol": "EQQQ",
+      "description": "INVESCO NASDAQ-100 DIST",
+      "position": 134,
+      "mark_price": 616.3,
+      "position_value": 82584.2,
+      "cost_basis_money": 65912.23965,
+      "fifo_pnl_unrealized": 16671.96035,
+      "percent_of_nav": 23.64,
+      "currency": "USD",
+      "live_price": null,
+      "price_updated": null
+    },
+    {
+      "symbol": "VUSD",
+      "description": "VANG S&P500 USDD",
+      "position": 612.7923,
+      "mark_price": 129.8075,
+      "position_value": 79545.04,
+      "cost_basis_money": 66286.811331,
+      "fifo_pnl_unrealized": 13258.22867,
+      "percent_of_nav": 22.77,
+      "currency": "USD",
+      "live_price": null,
+      "price_updated": null
+    },
+    {
+      "symbol": "DRAM",
+      "description": "DRAM (Strive 2X Long MSTR ETF or similar) - manual add",
+      "position": 775,
+      "mark_price": 64.47,
+      "position_value": 49964.25,
+      "cost_basis_money": 49964.25,
+      "fifo_pnl_unrealized": 0,
+      "percent_of_nav": 0,
+      "currency": "USD",
+      "live_price": 58.665000915527344,
+      "price_updated": "2026-09-18 17:18:15"
+    }
+  ],
+  "cash_latest": [
+    {
+      "id": 8491,
+      "account_id": "U15352922",
+      "amount": 315,
+      "currency": "USD",
+      "fx_rate_to_base": 1,
+      "report_date": "2026-06-04",
+      "created_at": "2026-06-04 14:18:22"
+    }
+  ],
+  "today": "2026-09-18",
+  "nav_today": []
+}

@@ -1,0 +1,180 @@
+{
+  "tables": [
+    "Accounts",
+    "Cash",
+    "ChangeInNAV",
+    "DailyNAV",
+    "Deposits",
+    "Dividends",
+    "Fees",
+    "Holdings",
+    "Interest",
+    "KBFundPrices",
+    "Settings",
+    "Taxes",
+    "Trades",
+    "Transactions",
+    "Transfers",
+    "Withdrawals",
+    "kb_fund_prices",
+    "kb_funds_values",
+    "live_prices",
+    "sqlite_sequence"
+  ],
+  "allSymbols": [
+    {
+      "symbol": "DRAM",
+      "description": "DRAM (Strive 2X Long MSTR ETF or similar) - manual add"
+    },
+    {
+      "symbol": "EQQQ",
+      "description": "INVESCO NASDAQ-100 DIST"
+    },
+    {
+      "symbol": "EQQU",
+      "description": "INVESCO NASDAQ-100 DIST"
+    },
+    {
+      "symbol": "IUIT",
+      "description": "ISHARES S&P 500 IT SECTOR"
+    },
+    {
+      "symbol": "SMH",
+      "description": "VANECK SEMICONDUCTOR ETF"
+    },
+    {
+      "symbol": "VUSD",
+      "description": "VANG S&P500 USDD"
+    }
+  ],
+  "latestHoldingsDate": "2026-06-04",
+  "holdings": [
+    {
+      "symbol": "SMH",
+      "description": "VANECK SEMICONDUCTOR ETF",
+      "position": 1571,
+      "mark_price": 64.2,
+      "position_value": 100858.2,
+      "cost_basis_money": 66798.61169,
+      "fifo_pnl_unrealized": 34059.58831,
+      "percent_of_nav": 28.87,
+      "currency": "USD",
+      "report_date": "2026-06-04"
+    },
+    {
+      "symbol": "IUIT",
+      "description": "ISHARES S&P 500 IT SECTOR",
+      "position": 2063,
+      "mark_price": 41.89,
+      "position_value": 86419.07,
+      "cost_basis_money": 66406.60671,
+      "fifo_pnl_unrealized": 20012.46329,
+      "percent_of_nav": 24.73,
+      "currency": "USD",
+      "report_date": "2026-06-04"
+    },
+    {
+      "symbol": "EQQQ",
+      "description": "INVESCO NASDAQ-100 DIST",
+      "position": 134,
+      "mark_price": 616.3,
+      "position_value": 82584.2,
+      "cost_basis_money": 65912.23965,
+      "fifo_pnl_unrealized": 16671.96035,
+      "percent_of_nav": 23.64,
+      "currency": "USD",
+      "report_date": "2026-06-04"
+    },
+    {
+      "symbol": "VUSD",
+      "description": "VANG S&P500 USDD",
+      "position": 612.7923,
+      "mark_price": 129.8075,
+      "position_value": 79545.04,
+      "cost_basis_money": 66286.811331,
+      "fifo_pnl_unrealized": 13258.22867,
+      "percent_of_nav": 22.77,
+      "currency": "USD",
+      "report_date": "2026-06-04"
+    },
+    {
+      "symbol": "DRAM",
+      "description": "DRAM (Strive 2X Long MSTR ETF or similar) - manual add",
+      "position": 775,
+      "mark_price": 64.47,
+      "position_value": 49964.25,
+      "cost_basis_money": 49964.25,
+      "fifo_pnl_unrealized": 0,
+      "percent_of_nav": 0,
+      "currency": "USD",
+      "report_date": "2026-06-04"
+    }
+  ],
+  "cash": [
+    {
+      "id": 8491,
+      "account_id": "U15352922",
+      "amount": 315,
+      "currency": "USD",
+      "fx_rate_to_base": 1,
+      "report_date": "2026-06-04",
+      "created_at": "2026-06-04 14:18:22"
+    },
+    {
+      "id": 9,
+      "account_id": "U15352922",
+      "amount": 1060,
+      "currency": "USD",
+      "fx_rate_to_base": 1,
+      "report_date": "2026-01-02",
+      "created_at": "2026-05-07 18:30:45"
+    },
+    {
+      "id": 8,
+      "account_id": "U15352922",
+      "amount": 66988.22061875497,
+      "currency": "USD",
+      "fx_rate_to_base": 1,
+      "report_date": "2025-08-20",
+      "created_at": "2026-04-29 08:04:13"
+    }
+  ],
+  "nav": [
+    {
+      "id": 8505845,
+      "account_id": "U15352922",
+      "date": "2026-09-17",
+      "nav_value": 502520.624342198,
+      "created_at": "2026-09-18 11:40:50"
+    },
+    {
+      "id": 8505844,
+      "account_id": "U15352922",
+      "date": "2026-09-16",
+      "nav_value": 492266.414342198,
+      "created_at": "2026-09-18 11:40:50"
+    },
+    {
+      "id": 8505843,
+      "account_id": "U15352922",
+      "date": "2026-09-15",
+      "nav_value": 485376.394342198,
+      "created_at": "2026-09-18 11:40:50"
+    },
+    {
+      "id": 8505842,
+      "account_id": "U15352922",
+      "date": "2026-09-14",
+      "nav_value": 486541.204342198,
+      "created_at": "2026-09-18 11:40:50"
+    },
+    {
+      "id": 8505841,
+      "account_id": "U15352922",
+      "date": "2026-09-11",
+      "nav_value": 511618.254342198,
+      "created_at": "2026-09-18 11:40:50"
+    }
+  ],
+  "livePrices_err": "no such table: LivePrices"
+}

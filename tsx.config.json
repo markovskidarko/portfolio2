@@ -1,0 +1,5 @@
+{
+  "tsx": {
+    "tsconfig": "./tsconfig.json"
+  }
+}
