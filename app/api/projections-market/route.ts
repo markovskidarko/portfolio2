@@ -166,7 +166,7 @@ export async function GET(request: Request) {
     }
 
     // Get current NAV
-    const aggregatedData = aggregateIBKRDataFromDB(selectedAccountIds);
+    const aggregatedData = await aggregateIBKRDataFromDB(selectedAccountIds);
     const currentNAV = aggregatedData.totalNAV;
 
     // Run multivariate Monte Carlo simulation
