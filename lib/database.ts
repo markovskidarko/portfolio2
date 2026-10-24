@@ -20,16 +20,15 @@ import postgres from 'postgres';
 
 // ─── Connection ──────────────────────────────────────────────────────────────
 
-const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) {
-  throw new Error('DATABASE_URL environment variable is not set');
-}
-
 let _sql: ReturnType<typeof postgres> | null = null;
 
 export function getDatabase(): ReturnType<typeof postgres> {
   if (!_sql) {
-    _sql = postgres(DATABASE_URL!, {
+    const DATABASE_URL = process.env.DATABASE_URL;
+    if (!DATABASE_URL) {
+      throw new Error('DATABASE_URL environment variable is not set');
+    }
+    _sql = postgres(DATABASE_URL, {
       ssl: 'require',
       max: 10,             // connection pool size
       idle_timeout: 30,    // seconds before idle connection is closed
