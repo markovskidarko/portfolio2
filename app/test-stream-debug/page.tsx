@@ -9,6 +9,7 @@ export default function TestStreamDebugPage() {
   const [status, setStatus] = useState<string>("Not started");
   const [messages, setMessages] = useState<string[]>([]);
   const [eventSource, setEventSource] = useState<EventSource | null>(null);
+  const [origin, setOrigin] = useState<string>("");
 
   const addMessage = (msg: string) => {
     console.log(`[DebugPage] ${msg}`);
@@ -16,6 +17,7 @@ export default function TestStreamDebugPage() {
   };
 
   useEffect(() => {
+    setOrigin(window.location.origin);
     addMessage("Page component mounted");
     addMessage(`Current URL: ${window.location.href}`);
     addMessage(`Will connect to: ${window.location.origin}/api/ws/all-metrics`);
@@ -102,22 +104,22 @@ export default function TestStreamDebugPage() {
           <div className="space-y-2 text-sm">
             <div>
               <strong>Health Check:</strong>{' '}
-              <a 
-                href="/api/health" 
+              <a
+                href="/api/health"
                 target="_blank"
                 className="text-blue-500 underline"
               >
-                {window.location.origin}/api/health
+                {origin}/api/health
               </a>
             </div>
             <div>
               <strong>SSE Endpoint:</strong>{' '}
-              <a 
-                href="/api/ws/all-metrics" 
+              <a
+                href="/api/ws/all-metrics"
                 target="_blank"
                 className="text-blue-500 underline"
               >
-                {window.location.origin}/api/ws/all-metrics
+                {origin}/api/ws/all-metrics
               </a>
             </div>
           </div>
