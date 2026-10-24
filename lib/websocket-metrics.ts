@@ -205,7 +205,7 @@ export async function calculateAllMetrics(): Promise<AllMetrics> {
       let liveNAV = 0;
       for (const account of validAccounts) {
         try {
-          const accountNAV = calculateAccountLiveNAV(account.id);
+          const accountNAV = await calculateAccountLiveNAV(account.id);
           liveNAV += accountNAV;
         } catch (err) {
           console.warn(`[WebSocket Metrics] Failed to get live NAV for ${account.id}:`, err);

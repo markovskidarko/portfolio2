@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     console.log(`[Projections API] Projection years: ${projectionYears}`);
 
     // Get aggregated portfolio data (includes equity curve and cash flows)
-    const aggregatedData = aggregateIBKRDataFromDB(selectedAccountIds);
+    const aggregatedData = await aggregateIBKRDataFromDB(selectedAccountIds);
     
     if (!aggregatedData.equityCurve || aggregatedData.equityCurve.length < 2) {
       return NextResponse.json({
