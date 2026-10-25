@@ -201,6 +201,17 @@ app.prepare().then(async () => {
   // Start heartbeat
   startHeartbeat();
 
+  // Self-ping to prevent Render free tier hibernation (every 4 minutes)
+  if (process.env.NODE_ENV === 'production') {
+    const SELF_PING_INTERVAL = 4 * 60 * 1000; // 4 minutes
+    setTimeout(() => {
+      setInterval(() => {
+        const url = `http://localhost:${port}/api/health`;
+        fetch(url).catch(() => {}); // fire and forget, ignore errors
+      }, SELF_PING_INTERVAL);
+    }, 30000); // wait 30s after startup before first ping
+  }
+
   server
     .once('error', (err) => {
       console.error(err);
