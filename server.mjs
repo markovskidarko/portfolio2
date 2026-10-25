@@ -7,8 +7,9 @@ import { WebSocketServer } from 'ws';
 let calculateAllMetrics = null;
 
 const dev = process.env.NODE_ENV !== 'production';
-// Bind host for LAN access. Prefer HOST; fall back to HOSTNAME; default all interfaces.
-const hostname = process.env.HOST || process.env.HOSTNAME || '0.0.0.0';
+// Always bind to 0.0.0.0 so Render's load balancer can reach the server.
+// (process.env.HOSTNAME on Render is the pod's internal hostname, not a valid bind address)
+const hostname = '0.0.0.0';
 const port = parseInt(process.env.PORT || '3000', 10);
 
 const app = next({ dev, hostname, port });
@@ -49,11 +50,11 @@ function startMetricsBroadcast() {
     console.error('[WebSocket] Cannot start metrics broadcast - calculateAllMetrics not loaded');
     return;
   }
-  
+
   metricsInterval = setInterval(async () => {
     if (connections.size === 0) return; // No connections, skip calculation
     if (!calculateAllMetrics) return; // Module not loaded yet
-    
+
     try {
       const metrics = await calculateAllMetrics();
       const message = JSON.stringify({
@@ -61,7 +62,7 @@ function startMetricsBroadcast() {
         data: metrics,
         timestamp: new Date().toISOString(),
       });
-      
+
       // Broadcast to all connected clients
       connections.forEach((ws) => {
         if (ws.isAlive !== false && ws.readyState === 1) { // WebSocket.OPEN
@@ -105,7 +106,7 @@ app.prepare().then(async () => {
   // Handle WebSocket upgrade requests
   server.on('upgrade', (request, socket, head) => {
     const { pathname } = parse(request.url, true);
-    
+
     console.log('[WebSocket] ===== Upgrade request received =====');
     console.log('[WebSocket] Pathname:', pathname);
     console.log('[WebSocket] Full URL:', request.url);
@@ -115,25 +116,25 @@ app.prepare().then(async () => {
       'sec-websocket-key': request.headers['sec-websocket-key'] ? 'present' : 'missing',
       'sec-websocket-version': request.headers['sec-websocket-version'],
     });
-    
+
     if (pathname === '/api/ws/metrics') {
       console.log('[WebSocket] ✅ Accepting WebSocket upgrade for /api/ws/metrics');
       wss.handleUpgrade(request, socket, head, (ws) => {
-        const clientIP = request.headers['x-forwarded-for'] || 
-                        request.headers['x-real-ip'] || 
-                        request.socket.remoteAddress || 
+        const clientIP = request.headers['x-forwarded-for'] ||
+                        request.headers['x-real-ip'] ||
+                        request.socket.remoteAddress ||
                         'unknown';
         const userAgent = request.headers['user-agent'] || 'unknown';
-        
+
         console.log('[WebSocket] New connection from', clientIP);
-        
+
         // Mark connection as alive
         ws.isAlive = true;
         connections.add(ws);
-        
+
         // Start metrics broadcast if not already running
         startMetricsBroadcast();
-        
+
         // Send initial metrics immediately
         if (calculateAllMetrics) {
           calculateAllMetrics()
@@ -152,17 +153,17 @@ app.prepare().then(async () => {
         } else {
           console.error('[WebSocket] calculateAllMetrics not loaded yet');
         }
-        
+
         // Handle pong (heartbeat response)
         ws.on('pong', () => {
           ws.isAlive = true;
         });
-        
+
         // Handle incoming messages
         ws.on('message', (data) => {
           try {
             const message = JSON.parse(data.toString());
-            
+
             if (message.type === 'pong') {
               // Client responded to ping
               ws.isAlive = true;
@@ -174,19 +175,19 @@ app.prepare().then(async () => {
             console.error('[WebSocket] Error parsing message:', error);
           }
         });
-        
+
         // Handle connection close
         ws.on('close', () => {
           console.log('[WebSocket] Connection closed from', clientIP);
           connections.delete(ws);
-          
+
           // Stop metrics broadcast if no connections left
           if (connections.size === 0 && metricsInterval) {
             clearInterval(metricsInterval);
             metricsInterval = null;
           }
         });
-        
+
         // Handle errors
         ws.on('error', (error) => {
           console.error('[WebSocket] Error:', error);
@@ -218,7 +219,7 @@ app.prepare().then(async () => {
       process.exit(1);
     })
     .listen(port, hostname, () => {
-      console.log(`> Ready on http://${hostname}:${port}`);
-      console.log(`> WebSocket server ready on ws://${hostname}:${port}/api/ws/metrics`);
+      console.log(`> Ready on http://0.0.0.0:${port}`);
+      console.log(`> WebSocket server ready on ws://0.0.0.0:${port}/api/ws/metrics`);
     });
 });
